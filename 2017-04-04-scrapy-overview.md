@@ -57,7 +57,7 @@ To understand the infrascture that's been built, let's break down the files and 
 At the very start of this, we will not be messing with the `pipelines.py` file - but once we have a dedicated db set up we will likely tweak those settings as well. Until then, all results will be stored as JSON files.
 
 ## What's the data I'm grabbing?
-For this project, I am scraping whiskey product reviews from [this site](http://wwwconnosr.com/). In particular, for each review I am grabbing the following: 
+For this project, I am scraping whiskey product reviews from [this site](http://www.connosr.com/). In particular, for each review I am grabbing the following: 
 
 - Author
 - Product
