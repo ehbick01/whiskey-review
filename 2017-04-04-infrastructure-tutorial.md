@@ -6,7 +6,7 @@ DynamoDB is a hosted database service that is part of the Amazon Web Services (A
 
 ## Getting Started
 
-** Step 1: Create a table**
+**Step 1: Create a table**
 
 After signing into the AWS Console, navigate to DynamoDB and click "Create a Table."  Once you set the table name, define what variable you want to partition your data against. This partition will apply across all of your data, so you want to be the most uniquely identifiable element across as many variables as possible (such as a name, or an account number).
 
