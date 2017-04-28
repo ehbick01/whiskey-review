@@ -10,6 +10,8 @@ class ReviewsSpider(scrapy.Spider):
     def parse(self, response):
         for review in response.css('div.details'):
             yield {
+                'source': "Connosr",
+                'category': "Whiskey",
                 'author': review.css('span.username::text').extract_first(),
                 'product': review.css('span.product::text').extract_first(),
                 'review': review.css('div.snippet p::text').extract_first(),
