@@ -1,8 +1,8 @@
 import scrapy
 
 
-class ReviewsSpider(scrapy.Spider):
-    name = "reviews"
+class ConnosrSpider(scrapy.Spider):
+    name = "connosr"
     start_urls = [
         'https://www.connosr.com/whisky-reviews:1',
     ]
