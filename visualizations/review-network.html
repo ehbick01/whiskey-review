@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+/*.link {
+  stroke: #f0f2f3;
+}*/
+
+.node {
+  stroke: #445359;
+}
+
+.circle text {
+  font: 10px sans-serif;
+  fill: #008abc;
+}
+
+circle {
+  fill: #7c888c;
+  stroke: #445359;
+  stroke-width: 1.5px;
+}
+
+</style>
+<body>
+<script src="//d3js.org/d3.v3.min.js"></script>
+<script>
+
+var width = 950,
+    height = 700;
+
+var svg = d3.select("body").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+var tooltip = d3.select("body")
+  .append("div")
+  .attr("class", "my-tooltip") //add the tooltip class
+  .style("position", "absolute")
+  .style("z-index", "10")
+  .style("visibility", "hidden");
+
+var force = d3.layout.force()
+    .size([width, height]);
+
+d3.csv("links_active.csv", function(error, links) {
+  if (error) throw error;
+
+  var nodesByName = {};
+
+  // Create nodes for each unique source and target.
+  links.forEach(function(link) {
+    link.source = nodeByName(link.source);
+    link.target = nodeByName(link.target);
+  });
+
+  // Extract the array of nodes from the map by name.
+  var nodes = d3.values(nodesByName);
+
+  // Create the link lines.
+  var link = svg.selectAll(".link")
+      .data(links)
+    .enter().append("line")
+      .attr("class", "link");
+
+  // Create circles for each user
+  var circle = svg.append("g").selectAll("circle")
+    .data(nodes)
+  .enter().append("circle")
+    .attr("r", 6)
+    .call(force.drag)
+    // .on('mouseover', function(d) {
+    //   console.log(d.name);
+    //   tooltip.style("visibility", "visible")
+    //     .text(d.name)
+    // })
+    .on("mousemove", function() {
+      return tooltip.style("top", (d3.event.pageY - 40) + "px").style("left", (d3.event.pageX - 130) + "px");
+    })
+    .on("mouseout", function() {
+      return tooltip.style("visibility", "hidden");
+    })
+    .on('mouseover', function(d) {
+      console.log(d.name);
+      tooltip.style("visibility", "visible")
+        .text(d.name)
+      link.style('stroke-width', function(l) {
+        if (d === l.source || d === l.target)
+            return 2;
+        else
+            return 0;
+    });
+      link.style('stroke', function(l) {
+        if (d === l.source || d === l.target)
+            return "#008abc";
+        else
+            return "#f0f2f3";
+    });
+  });
+
+  // Start the force layout.
+  force
+          .nodes(nodes)
+          .links(links)
+          .linkDistance(400)
+          .charge(1)
+          // .gravity(1)
+          .on("tick", tick)
+          .start();
+
+  // Define tick function to move the nodes around
+  function tick() {
+    link.attr("x1", function(d) { return d.source.x; })
+        .attr("y1", function(d) { return d.source.y; })
+        .attr("x2", function(d) { return d.target.x; })
+        .attr("y2", function(d) { return d.target.y; });
+
+    circle.attr("cx", function(d) { return d.x = Math.max(15, Math.min(width - 15, d.x)); })
+        .attr("cy", function(d) { return d.y= Math.max(15, Math.min(height - 15, d.y)); });
+      }
+
+  function nodeByName(name) {
+    return nodesByName[name] || (nodesByName[name] = {name: name});
+  }
+
+  function transform(d) {
+    return "translate(" + d.x + "," + d.y + ")";
+  }
+});
+
+</script>
