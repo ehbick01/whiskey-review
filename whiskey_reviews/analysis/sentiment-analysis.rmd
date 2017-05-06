@@ -1,0 +1,163 @@
+---
+title: "Analyzing Product Sentiment"
+date: 2017-05-02
+categories: ["Consumer Analysis"]
+tags: ["sentiment analysis", "consumer reviews", "visualization"]
+draft: true
+output: md_document
+
+---
+
+## Purpose
+
+<INSERT STUFF ABOUT PURPOSE>
+
+## Background
+
+<INSERT STUFF ABOUT BACKGROUND>
+
+## Workflow
+
+<INSERT STUFF ABOUT WORKFLOW>
+
+```{r setup, include = FALSE}
+
+## Load packages
+
+# Data loading
+library(jsonlite)
+library(tidyjson)
+
+# Data manipulation
+library(tidyverse)
+library(tidytext)
+
+# Data visualization
+library(ggthemes)
+library(extrafont)
+library(scales)
+
+## Set plot theme
+theme_set(
+  theme_bw(base_family = 'Arial', base_size = 12) +
+    theme(
+      plot.title = element_text(face = 'bold', hjust = 0),
+      text = element_text(colour = '#4e5c65'),
+      panel.background = element_rect('#ffffff'),
+      strip.background = element_rect('#ffffff', colour = 'white'),
+      plot.background = element_rect('#ffffff'),
+      panel.border = element_rect(colour = '#ffffff'),
+      panel.grid.major.x = element_blank(),
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      legend.background = element_rect('#ffffff'),
+      legend.title = element_blank(),
+      legend.position = 'right',
+      legend.direction = 'vertical',
+      legend.key = element_blank(),
+      strip.text = element_text(face = 'bold', size = 9),
+      axis.text = element_text(face = 'bold', size = 9),
+      axis.title = element_blank(),
+      axis.ticks = element_blank()
+    )
+)
+
+```
+
+```{r, pull-data}
+
+## Read in json file
+sentiment.data <- jsonlite::fromJSON(txt = '../full_connosr_reviews.json', 
+                         simplifyDataFrame = TRUE)
+
+## Clean Up
+
+# Tokenize words
+removethis <- "c\\("
+removefind <- " Find where to "
+
+sentiment.words <- sentiment.data %>%
+  mutate(review_unlisted = str_replace(str_replace(paste0(review), removethis, ""), removefind, "")) %>% 
+  select(-review) %>%
+  unnest_tokens(word, review_unlisted) %>%
+  filter(!word %in% stop_words$word,
+         str_detect(word, "[a-z]"))
+  
+sentiment.words
+
+## Perform Sentiment Analysis
+
+# Define lexicon
+nrc <- sentiments %>%
+  filter(lexicon == "nrc") %>%
+  dplyr::select(word, sentiment)
+
+nrc
+
+# Calculate the total number of words per product
+products <- sentiment.words %>%
+  group_by(brand) %>%
+  mutate(total_words = n()) %>%
+  ungroup() %>%
+  distinct(brand, total_words)
+
+# Calculate the total number of sentiments for each product and join
+by_product_sentiment <- sentiment.words %>%
+  inner_join(nrc, by = "word") %>%
+  count(brand, sentiment) %>%
+  ungroup() %>%
+  complete(sentiment, fill = list(n = 0)) %>%
+  inner_join(products) %>%
+  group_by(brand, sentiment, total_words) %>%
+  summarize(words = sum(n)) %>%
+  ungroup()
+
+# Calculate log odds ratios to find which products are most/least likely to get each sentiment
+sentiment_differences <- by_product_sentiment %>%
+  group_by(brand) %>%
+  mutate(own_ratio = (words + 1) / (total_words + 1)) %>% 
+  group_by(sentiment) %>%
+  mutate(total_ratio = (sum(words) + 1) / (sum(total_words) + 1),
+         odds.ratio = log2(own_ratio / total_ratio))
+
+
+```
+
+```{r, plot-initial}
+
+## Subset to BF Brands
+
+# Identify brand strings
+brands <- 'Slane|Jack Daniel|Woodford|GlenDronach|Glenglassaugh|BenRiach'
+
+# Filter out
+bf.brands <- sentiment_differences %>% 
+  filter(grepl(brands, brand)) %>% 
+  mutate(direction = ifelse(odds.ratio < 0, "a", "b"))
+
+# Plot
+ggplot(bf.brands, aes(x = sentiment, y = odds.ratio, group = brand)) + 
+  geom_bar(stat = 'identity', aes(fill = direction)) +
+  coord_flip() + 
+  scale_fill_manual(values = c('#FF2C00', '#00AEF0')) +
+  labs(title = "Likelihood Ratios by Brand Family and Sentiment",
+       subtitle = "The bars represent the increase or decrease the the likelihood for reviews\nto portray each sentiment",
+       caption = "Sentiment analys based on 9k reviews from connosr.com") + 
+  facet_grid(~brand) + 
+  theme(legend.position = 'none',
+        axis.text.x = element_blank())
+
+ggsave('bf-brand-sentiments.png', type = 'cairo-png')
+
+```
+
+```{r, stage-data}
+
+# Save all brands
+write_csv(sentiment_differences, 'total-brand-sentiments.csv')
+
+# Save BF-only brands
+write_csv(bf.brands, 'bf-brand-sentiments.csv')
+
+```
+
