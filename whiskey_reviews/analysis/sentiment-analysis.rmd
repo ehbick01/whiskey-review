@@ -31,6 +31,7 @@ library(tidyjson)
 # Data manipulation
 library(tidyverse)
 library(tidytext)
+library(stringr)
 
 # Data visualization
 library(ggthemes)
@@ -148,6 +149,113 @@ ggplot(bf.brands, aes(x = sentiment, y = odds.ratio, group = brand)) +
         axis.text.x = element_blank())
 
 ggsave('bf-brand-sentiments.png', type = 'cairo-png')
+
+```
+
+## Next Step: Defining Sentiments
+
+While having the lexicon is helpful, we also lose out on industry-specific or community-specific sentiments based on the words used within reviews on the site. A workaround for this is to build out our own lexicon, using the reviews themselves and the ratings for:
+
+- Balance
+- Nose
+- Taste
+- Finish
+- Overall
+
+```{r, build-sentiment}
+
+## Manipulating Data
+
+# Converting ratings to numeric
+sentiment.words$`finish-rating` <- as.numeric(sentiment.words$`finish-rating`)
+sentiment.words$`balance-rating` <- as.numeric(sentiment.words$`balance-rating`)
+sentiment.words$`taste-rating` <- as.numeric(sentiment.words$`taste-rating`)
+sentiment.words$`nose-rating` <- as.numeric(sentiment.words$`nose-rating`)
+sentiment.words$`overall-rating` <- as.numeric(sentiment.words$`overall-rating`)
+
+# Find attribute word association
+
+# Calculate total words
+words <- sentiment.words %>% 
+  group_by(word) %>%
+  mutate(total_count = n()) %>%
+  ungroup() %>%
+  distinct(word, total_count)
+  # filter(total_count >= quantile(total_count, 0.95))
+
+# Calculate words used for each rating category
+rating.sentiments <- sentiment.words %>% 
+  select(matches('rating|word')) %>%
+  gather('rating', 'score', -word) %>%
+  filter(rating != "overall-rating",
+         score > 23) %>% 
+  group_by(rating) %>% 
+  count(word) %>%
+  # filter(n >= quantile(n, 0.95)) %>%
+  inner_join(words, by = 'word') %>%
+  ungroup() %>%
+  mutate(own_ratio = (n + 1) / (total_count + 1)) %>%
+  group_by(rating) %>%
+  mutate(total_ratio = (sum(n) + 1) / (sum(total_count) + 1),
+         odds.ratio = log2(own_ratio / total_ratio))
+
+# Group influence of words on ratings
+word.influence <- rating.sentiments %>%  
+  reshape2::dcast(word ~ rating, value.var = 'odds.ratio')
+
+# Plot most used words and their influences
+rating.sentiments %>% 
+  filter(n > 150) %>%
+  mutate(direction = ifelse(odds.ratio < 0, 'a', 'b'),
+         rating_renamed = gsub('-rating', '', rating)) %>%
+  ggplot(aes(x = reorder(word, odds.ratio), y = odds.ratio, group = rating_renamed)) + 
+    geom_bar(stat = 'identity', aes(fill = direction)) +
+      scale_fill_manual(values = c('#FF2C00', '#00AEF0')) +
+  labs(title = "Word Association on Product Attributes",
+       subtitle = "The bars represent the increase or decrease in favorable ratings for \nbalance, finish, nose, and taste by word",
+       caption = "Analys based on the most common words across 9k reviews from connosr.com") + 
+    coord_flip() +
+    facet_grid(~rating_renamed) + 
+    theme(legend.position = 'none',
+          panel.grid.major.y = element_line(),
+          panel.grid.major.x = element_blank(),
+          panel.grid.minor.x = element_blank())
+
+ggsave('product-word-association.png', type = 'cairo-png')
+
+## NEED TO CHECK THIS PART OUT -- NOT SURE WORKING PROPERLY
+
+attribute_differences <- sentiment.words %>%
+  inner_join(word.influence, by = 'word') %>% 
+  group_by(brand) %>% 
+  summarise('balance' = mean(`balance-rating.y`, na.rm = TRUE),
+            'finish' = mean(`finish-rating.y`, na.rm = TRUE),
+            'nose' = mean(`nose-rating.y`, na.rm = TRUE),
+            'taste' = mean(`taste-rating.y`, na.rm = TRUE)) %>% 
+    mutate('balance' = (balance + 1) / (mean(balance) + 1) - 1,
+         'finish' = (finish + 1) / (mean(finish) + 1) - 1 ,
+         'nose' = (nose + 1) / (mean(nose) + 1) - 1,
+         'taste' = (taste + 1) / (mean(taste) + 1) - 1)
+
+# Filter out
+bf.brands <- attribute_differences %>% 
+  filter(grepl(brands, brand)) %>% 
+  gather(attribute, odds.ratio, -brand) %>%
+  mutate(direction = ifelse(odds.ratio < 0, "a", "b"))
+
+# Plot
+ggplot(bf.brands, aes(x = attribute, y = odds.ratio, group = brand)) + 
+  geom_bar(stat = 'identity', aes(fill = direction)) +
+  coord_flip() + 
+  scale_fill_manual(values = c('#FF2C00', '#00AEF0')) +
+  labs(title = "Likelihood Ratios by Brand Family and Attribute",
+       subtitle = "The bars represent the increase or decrease in the the odds for reviews\nto portray each attribute favorably",
+       caption = "Analys based on 9k reviews from connosr.com") + 
+  facet_grid(~brand) + 
+  theme(legend.position = 'none',
+        axis.text.x = element_blank())
+
+ggsave('bf-brand-attributes.png', type = 'cairo-png')
 
 ```
 
